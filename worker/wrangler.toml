@@ -1,0 +1,10 @@
+name = "auto-clip-worker"
+main = "src/index.js"
+compatibility_date = "2026-07-18"
+
+[[queues.producers]]
+binding = "AUTO_CLIP_JOBS"
+queue = "auto-clip-jobs"
+
+[[queues.consumers]]
+queue = "auto-clip-jobs"

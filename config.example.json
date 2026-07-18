@@ -1,0 +1,10 @@
+{
+  "clip_duration_seconds": 30,
+  "pre_drop_seconds": 10,
+  "max_clips": 12,
+  "min_spacing_seconds": 45,
+  "sample_rate": 22050,
+  "render_vertical_9x16": false,
+  "dry_run": false,
+  "output_dir": "outputs"
+}

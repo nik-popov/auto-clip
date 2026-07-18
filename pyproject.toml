@@ -1,0 +1,31 @@
+[project]
+name = "auto-clip"
+version = "0.1.0"
+description = "Automated DJ drop detection and short-form clip rendering pipeline"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "librosa>=0.10.2",
+  "numpy>=1.26.0",
+  "pydantic>=2.7.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.2.0",
+]
+
+[project.scripts]
+auto-clip = "auto_clip.cli:main"
+auto-clip-processor = "auto_clip.processor_webhook:main"
+
+[build-system]
+requires = ["setuptools>=69.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["auto_clip*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
