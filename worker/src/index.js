@@ -100,7 +100,7 @@ function appUi() {
       }
       .badge.processing, .badge.pending, .badge.queued { background: #172554; color: #93c5fd; }
       .badge.done { background: #052e16; color: var(--accent); }
-      .badge.error { background: #450a0a; color: var(--err); }
+      .badge.error, .badge.lost { background: #450a0a; color: var(--err); }
       .spinner {
         width: 16px; height: 16px; border: 2px solid var(--line); border-top-color: var(--accent);
         border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block; vertical-align: -3px;
@@ -374,9 +374,11 @@ config fields: clip_duration_seconds, max_clips, min_spacing_seconds,
         clearInterval(pollTimer); pollTimer = null;
         $("job-progress").classList.add("hidden");
 
-        if (state === "error") {
+        if (state === "error" || state === "lost") {
           var box = $("job-error");
-          box.textContent = "Processing failed: " + ((data.status && data.status.error) || "unknown error");
+          box.textContent = state === "lost"
+            ? "This job was lost before processing (service restart). Please resubmit the URL above."
+            : "Processing failed: " + ((data.status && data.status.error) || "unknown error");
           box.classList.remove("hidden");
           return;
         }
@@ -476,6 +478,13 @@ export default {
         await env.AUTO_CLIP_JOBS.send(payload);
       }
 
+      if (env.OUTPUTS) {
+        await env.OUTPUTS.put(
+          `jobs/${payload.id}/status.json`,
+          JSON.stringify({ state: "queued", source: payload.source, requestedAt: payload.requestedAt }, null, 2)
+        );
+      }
+
       return json({
         ok: true,
         accepted: true,
@@ -510,14 +519,20 @@ export default {
         }));
       };
 
-      // Already synced to R2?
+      const putStatus = async (status) => {
+        await env.OUTPUTS.put(`jobs/${jobId}/status.json`, JSON.stringify(status, null, 2));
+      };
+
       const statusObject = await env.OUTPUTS.get(`jobs/${jobId}/status.json`);
-      if (statusObject) {
-        const status = await statusObject.json();
-        return json({ ok: true, job: jobId, status, files: await listFiles() });
+      let stored = null;
+      if (statusObject) { try { stored = await statusObject.json(); } catch {} }
+
+      // Terminal states are served straight from R2.
+      if (stored && (stored.state === "done" || stored.state === "error" || stored.state === "lost")) {
+        return json({ ok: true, job: jobId, status: stored, files: await listFiles() });
       }
 
-      // Ask the container and sync finished results into R2.
+      // Non-terminal: ask the container and sync into R2.
       if (env.PROCESSOR) {
         try {
           const container = env.PROCESSOR.getByName("processor-v2");
@@ -534,23 +549,35 @@ export default {
               if (info.summary) {
                 await env.OUTPUTS.put(`jobs/${jobId}/summary.json`, JSON.stringify(info.summary, null, 2));
               }
-              const status = { state: "done", clip_count: (info.files || []).length };
-              await env.OUTPUTS.put(`jobs/${jobId}/status.json`, JSON.stringify(status, null, 2));
+              const status = { ...(stored || {}), state: "done", clip_count: (info.files || []).length };
+              await putStatus(status);
               return json({ ok: true, job: jobId, status, files: await listFiles() });
             }
             if (info.state === "error") {
-              const status = { state: "error", error: info.error };
-              await env.OUTPUTS.put(`jobs/${jobId}/status.json`, JSON.stringify(status, null, 2));
+              const status = { ...(stored || {}), state: "error", error: info.error };
+              await putStatus(status);
               return json({ ok: true, job: jobId, status, files: [] });
             }
-            return json({ ok: true, job: jobId, status: { state: info.state || "processing" }, files: [] });
+            const status = { ...(stored || {}), state: info.state || "processing" };
+            if (!stored || stored.state !== status.state) await putStatus(status);
+            return json({ ok: true, job: jobId, status, files: [] });
+          }
+
+          // Container doesn't know this job. If it was queued a while ago, mark it lost.
+          if (stored && stored.requestedAt) {
+            const ageMs = Date.now() - Date.parse(stored.requestedAt);
+            if (Number.isFinite(ageMs) && ageMs > 5 * 60 * 1000) {
+              const status = { ...stored, state: "lost", error: "Job never reached the processor (likely a service restart). Please resubmit." };
+              await putStatus(status);
+              return json({ ok: true, job: jobId, status, files: [] });
+            }
           }
         } catch (error) {
           console.error("Container results sync failed", error);
         }
       }
 
-      return json({ ok: true, job: jobId, status: { state: "pending" }, files: [] });
+      return json({ ok: true, job: jobId, status: stored || { state: "pending" }, files: [] });
     }
 
     if (request.method === "GET" && url.pathname.startsWith("/files/")) {
