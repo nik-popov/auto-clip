@@ -356,11 +356,13 @@ config fields: clip_duration_seconds, max_clips, min_spacing_seconds,
 
       async function poll() {
         if (!currentJob) return;
+        var jobAtStart = currentJob;
         var res, data;
         try {
           res = await fetch("/results/" + encodeURIComponent(currentJob));
           data = await res.json();
         } catch (e) { return; }
+        if (jobAtStart !== currentJob) return;
         var state = (data.status && data.status.state) || "pending";
         $("job-state").className = "badge " + state;
         $("job-state").textContent = state;
@@ -383,6 +385,7 @@ config fields: clip_duration_seconds, max_clips, min_spacing_seconds,
         $("job-progress").classList.add("hidden");
 
         if (state === "error" || state === "lost") {
+          $("gallery").innerHTML = ""; $("drops").innerHTML = "";
           var box = $("job-error");
           if (state === "lost") {
             box.textContent = "This job was lost before processing (service restart). Please resubmit the URL above.";
@@ -495,7 +498,7 @@ export default {
       if (env.OUTPUTS) {
         await env.OUTPUTS.put(
           `jobs/${payload.id}/status.json`,
-          JSON.stringify({ state: "queued", source: payload.source, requestedAt: payload.requestedAt }, null, 2)
+          JSON.stringify({ state: "queued", source: payload.source, config: payload.config, requestedAt: payload.requestedAt }, null, 2)
         );
       }
 
@@ -577,11 +580,25 @@ export default {
             return json({ ok: true, job: jobId, status, files: [] });
           }
 
-          // Container doesn't know this job. If it was queued a while ago, mark it lost.
+          // Container doesn't know this job: it crashed mid-job or never got it.
+          // Auto-requeue up to twice, then mark lost.
           if (stored && stored.requestedAt) {
             const ageMs = Date.now() - Date.parse(stored.requestedAt);
-            if (Number.isFinite(ageMs) && ageMs > 5 * 60 * 1000) {
-              const status = { ...stored, state: "lost", error: "Job never reached the processor (likely a service restart). Please resubmit." };
+            const retries = stored.retry_count || 0;
+            if (Number.isFinite(ageMs) && ageMs > 2 * 60 * 1000) {
+              if (retries < 2 && env.AUTO_CLIP_JOBS && stored.source) {
+                const retryPayload = {
+                  source: stored.source,
+                  config: stored.config ?? null,
+                  id: jobId,
+                  requestedAt: new Date().toISOString()
+                };
+                await env.AUTO_CLIP_JOBS.send(retryPayload);
+                const status = { ...stored, state: "queued", retry_count: retries + 1, requestedAt: retryPayload.requestedAt };
+                await putStatus(status);
+                return json({ ok: true, job: jobId, status, files: [] });
+              }
+              const status = { ...stored, state: "lost", error: "Processing crashed repeatedly (possibly a very long/heavy video). Please resubmit or lower quality settings." };
               await putStatus(status);
               return json({ ok: true, job: jobId, status, files: [] });
             }

@@ -12,12 +12,36 @@ from auto_clip.config import RunRequest
 
 JOBS: dict[str, dict[str, object]] = {}
 JOBS_LOCK = threading.Lock()
+STATE_FILE: Path | None = None
 
 
 def _set_job(job_id: str, **fields: object) -> None:
     with JOBS_LOCK:
         entry = JOBS.setdefault(job_id, {})
         entry.update(fields)
+        if STATE_FILE is not None:
+            try:
+                STATE_FILE.write_text(json.dumps(JOBS), encoding="utf-8")
+            except Exception:
+                pass
+
+
+def _load_state(state_file: Path) -> None:
+    global STATE_FILE
+    STATE_FILE = state_file
+    if state_file.exists():
+        try:
+            data = json.loads(state_file.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                with JOBS_LOCK:
+                    for job_id, entry in data.items():
+                        # Anything mid-processing when we died is now failed.
+                        if isinstance(entry, dict) and entry.get("state") == "processing":
+                            entry["state"] = "error"
+                            entry["error"] = "Processor restarted mid-job (out of memory or crash). Job was automatically retried if eligible."
+                        JOBS[job_id] = entry
+        except Exception:
+            pass
 
 
 def _process_job(payload: dict[str, object], work_dir: Path, config_path: str | None) -> None:
@@ -188,6 +212,7 @@ def main() -> None:
 
     work_dir = Path(args.work_dir)
     work_dir.mkdir(parents=True, exist_ok=True)
+    _load_state(work_dir / "jobs_state.json")
 
     server = ProcessorServer((args.host, args.port), work_dir=work_dir)
     print(f"Processor webhook listening on http://{args.host}:{args.port}")

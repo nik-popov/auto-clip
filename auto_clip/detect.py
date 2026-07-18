@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Iterable
 
 import librosa
@@ -14,7 +15,15 @@ def detect_drop_candidates(
     config: PipelineConfig,
     heatmap: list[tuple[float, float, float]] | None = None,
 ) -> list[DropCandidate]:
-    y, sr = librosa.load(wav_path, sr=config.sample_rate, mono=True)
+    # Long sets: halve the analysis sample rate to bound memory usage.
+    sr_target = config.sample_rate
+    try:
+        if Path(wav_path).stat().st_size > 300 * 1024 * 1024:
+            sr_target = min(sr_target, 11025)
+    except OSError:
+        pass
+
+    y, sr = librosa.load(wav_path, sr=sr_target, mono=True)
 
     hop_length = 512
     onset_env = librosa.onset.onset_strength(y=y, sr=sr, hop_length=hop_length)
