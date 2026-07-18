@@ -5,6 +5,7 @@ from pathlib import Path
 
 from auto_clip.config import RunRequest, load_config
 from auto_clip.detect import detect_drop_candidates
+from auto_clip.hotspots import fetch_youtube_heatmap
 from auto_clip.ingest import ingest_source
 from auto_clip.render import render_clips
 from auto_clip.utils import write_json
@@ -36,13 +37,18 @@ def run_pipeline(request: RunRequest) -> dict[str, object]:
         write_json(report_path, run_summary)
         return run_summary
 
-    candidates = detect_drop_candidates(source_artifacts.wav_path, config)
+    heatmap: list[tuple[float, float, float]] = []
+    if config.use_youtube_heatmap:
+        heatmap = fetch_youtube_heatmap(request.source)
+
+    candidates = detect_drop_candidates(source_artifacts.wav_path, config, heatmap=heatmap)
     clips = render_clips(source_artifacts.video_path, source_artifacts.source_id, candidates, config)
 
     run_summary = {
         "source": request.source,
         "source_id": source_artifacts.source_id,
         "candidate_count": len(candidates),
+        "heatmap_points": len(heatmap),
         "clips": clips,
         "config": config.model_dump(),
     }

@@ -13,6 +13,8 @@ class PipelineConfig(BaseModel):
     min_spacing_seconds: int = Field(default=45, ge=10, le=600)
     sample_rate: int = Field(default=22050, ge=8000, le=96000)
     render_vertical_9x16: bool = False
+    use_youtube_heatmap: bool = True
+    heatmap_weight: float = Field(default=0.5, ge=0.0, le=1.0)
     dry_run: bool = False
     output_dir: str = "outputs"
 

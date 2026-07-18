@@ -199,7 +199,8 @@ GET  /files/jobs/&lt;job-id&gt;/&lt;name&gt;   → media file (mp4 / json)
 GET  /health                        → service check
 
 config fields: clip_duration_seconds, max_clips, min_spacing_seconds,
-               pre_drop_seconds, render_vertical_9x16, sample_rate</pre>
+               pre_drop_seconds, render_vertical_9x16, sample_rate,
+               use_youtube_heatmap (default true), heatmap_weight (0-1)</pre>
       </details>
     </main>
 

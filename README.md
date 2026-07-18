@@ -52,6 +52,8 @@ auto-clip "https://www.youtube.com/watch?v=..." --config config.local.json
 - `min_spacing_seconds`: Minimum distance between selected drop points.
 - `sample_rate`: Audio analysis sample rate.
 - `render_vertical_9x16`: If true, re-encodes output to 1080x1920 style layout with blurred background.
+- `use_youtube_heatmap`: If true (default), blends YouTube "Most Replayed" audience data into drop scoring for YouTube sources.
+- `heatmap_weight`: 0-1 blend weight of audience replay data vs pure audio analysis (default 0.5).
 - `dry_run`: If true, prints ffmpeg/yt-dlp commands without running them.
 - `output_dir`: Clip output root directory.
 

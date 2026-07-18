@@ -9,7 +9,11 @@ from auto_clip.config import PipelineConfig
 from auto_clip.types import DropCandidate
 
 
-def detect_drop_candidates(wav_path: str, config: PipelineConfig) -> list[DropCandidate]:
+def detect_drop_candidates(
+    wav_path: str,
+    config: PipelineConfig,
+    heatmap: list[tuple[float, float, float]] | None = None,
+) -> list[DropCandidate]:
     y, sr = librosa.load(wav_path, sr=config.sample_rate, mono=True)
 
     hop_length = 512
@@ -28,6 +32,14 @@ def detect_drop_candidates(wav_path: str, config: PipelineConfig) -> list[DropCa
     combined = score * 0.7 + _normalize(np.maximum(0.0, slope)) * 0.3
 
     frame_times = librosa.frames_to_time(np.arange(len(combined)), sr=sr, hop_length=hop_length)
+
+    # Blend in audience replay data (YouTube Most Replayed) when available:
+    # audio finds the precise drop, the heatmap says where humans actually rewind.
+    if heatmap:
+        heat = heatmap_curve(frame_times, heatmap)
+        weight = float(config.heatmap_weight)
+        combined = combined * (1.0 - weight) + heat * weight
+
     raw = _top_local_maxima(frame_times, combined, max_items=config.max_clips * 8)
     ranked = _enforce_min_spacing(
         sorted(raw, key=lambda item: item.score, reverse=True),
@@ -35,6 +47,15 @@ def detect_drop_candidates(wav_path: str, config: PipelineConfig) -> list[DropCa
         max_items=config.max_clips,
     )
     return ranked
+
+
+def heatmap_curve(times: np.ndarray, heatmap: list[tuple[float, float, float]]) -> np.ndarray:
+    """Map replay-heatmap segments onto per-frame times, normalized to 0..1."""
+    values = np.zeros_like(times)
+    for start, end, value in heatmap:
+        mask = (times >= start) & (times < end)
+        values[mask] = np.maximum(values[mask], value)
+    return _normalize(values)
 
 
 def _top_local_maxima(times: np.ndarray, values: np.ndarray, max_items: int) -> list[DropCandidate]:
