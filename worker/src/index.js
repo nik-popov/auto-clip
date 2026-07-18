@@ -372,7 +372,12 @@ config fields: clip_duration_seconds, max_clips, min_spacing_seconds,
           var elapsed = Math.floor((Date.now() - startedAt) / 1000);
           var mins = Math.floor(elapsed / 60);
           if (state === "processing") {
-            $("job-hint").textContent = "Processing — downloading, analyzing and cutting clips… (" + mins + "m elapsed; long sets can take 10-30 min)";
+            var stageText = {
+              downloading: "Step 1/3: Downloading the video\u2026",
+              analyzing: "Step 2/3: Analyzing audio for drops\u2026",
+              rendering: "Step 3/3: Cutting clips\u2026"
+            }[data.status && data.status.stage] || "Processing\u2026";
+            $("job-hint").textContent = stageText + " (" + mins + "m elapsed; long sets can take 10-30 min)";
           } else if (elapsed > 150) {
             $("job-hint").textContent = "Still pending after " + mins + "m — this job was likely lost (e.g. during a service restart). Resubmit the URL above.";
           } else {
@@ -576,7 +581,8 @@ export default {
               return json({ ok: true, job: jobId, status, files: [] });
             }
             const status = { ...(stored || {}), state: info.state || "processing" };
-            if (!stored || stored.state !== status.state) await putStatus(status);
+            if (info.stage) status.stage = info.stage;
+            if (!stored || stored.state !== status.state || stored.stage !== status.stage) await putStatus(status);
             return json({ ok: true, job: jobId, status, files: [] });
           }
 

@@ -50,7 +50,7 @@ def _process_job(payload: dict[str, object], work_dir: Path, config_path: str | 
 
     try:
         request = RunRequest(source=source, config_path=config_path, work_dir=str(work_dir))
-        summary = run_pipeline(request)
+        summary = run_pipeline(request, progress=lambda stage: _set_job(job_id, stage=stage))
 
         clip_paths = []
         for clip in summary.get("clips", []):
@@ -103,6 +103,7 @@ class ProcessorHandler(BaseHTTPRequestHandler):
                         "ok": True,
                         "job_id": job_id,
                         "state": entry.get("state"),
+                        "stage": entry.get("stage"),
                         "files": files,
                         "summary": entry.get("summary"),
                         "error": entry.get("error"),

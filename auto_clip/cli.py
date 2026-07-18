@@ -19,8 +19,16 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def run_pipeline(request: RunRequest) -> dict[str, object]:
+def run_pipeline(request: RunRequest, progress=None) -> dict[str, object]:
+    def report(stage: str) -> None:
+        if progress is not None:
+            try:
+                progress(stage)
+            except Exception:
+                pass
+
     config = load_config(request.config_path)
+    report("downloading")
     source_artifacts = ingest_source(request.source, request.work_dir, config)
 
     if config.dry_run:
@@ -41,7 +49,9 @@ def run_pipeline(request: RunRequest) -> dict[str, object]:
     if config.use_youtube_heatmap:
         heatmap = fetch_youtube_heatmap(request.source)
 
+    report("analyzing")
     candidates = detect_drop_candidates(source_artifacts.wav_path, config, heatmap=heatmap)
+    report("rendering")
     clips = render_clips(source_artifacts.video_path, source_artifacts.source_id, candidates, config)
 
     run_summary = {
