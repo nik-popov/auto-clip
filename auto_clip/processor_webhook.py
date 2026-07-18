@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import threading
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -44,13 +45,35 @@ def _load_state(state_file: Path) -> None:
             pass
 
 
+def _cleanup_workspace(work_dir: Path, keep: int = 2) -> None:
+    """Bound disk usage: keep only the newest job dirs in artifacts and outputs."""
+    for root in (work_dir, Path("outputs")):
+        if not root.exists():
+            continue
+        dirs = sorted(
+            (d for d in root.iterdir() if d.is_dir() and d.name != "webhook_configs"),
+            key=lambda d: d.stat().st_mtime,
+            reverse=True,
+        )
+        for old in dirs[keep:]:
+            shutil.rmtree(old, ignore_errors=True)
+
+
 def _process_job(payload: dict[str, object], work_dir: Path, config_path: str | None) -> None:
     job_id = str(payload.get("id") or "manual")
     source = str(payload["source"])
 
     try:
+        _cleanup_workspace(work_dir)
         request = RunRequest(source=source, config_path=config_path, work_dir=str(work_dir))
         summary = run_pipeline(request, progress=lambda stage: _set_job(job_id, stage=stage))
+
+        # Source media is no longer needed once clips are cut; free the disk.
+        source_dir = work_dir / str(summary.get("source_id", ""))
+        for name in ("source.mp4", "source.wav"):
+            media = source_dir / name
+            if media.exists():
+                media.unlink(missing_ok=True)
 
         clip_paths = []
         for clip in summary.get("clips", []):

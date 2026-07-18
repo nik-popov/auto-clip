@@ -1,7 +1,38 @@
 import numpy as np
 
-from auto_clip.detect import _enforce_min_spacing, heatmap_curve
+from auto_clip.detect import _enforce_min_spacing, heatmap_curve, refine_clip_bounds
 from auto_clip.types import DropCandidate
+
+
+def test_refine_clip_bounds_traces_energy_arc():
+    # 300s timeline at 1 frame/sec: quiet -> buildup -> drop plateau -> fade.
+    times = np.arange(300, dtype=float)
+    scores = np.zeros(300)
+    scores[100:120] = np.linspace(0.1, 1.0, 20)  # buildup 100-120
+    scores[120:160] = 1.0                        # drop plateau 120-160
+    scores[160:180] = np.linspace(1.0, 0.05, 20) # fade
+
+    candidate = DropCandidate(timestamp_seconds=125.0, score=1.0)
+    refine_clip_bounds(times, scores, [candidate], min_len=20.0, max_len=90.0)
+
+    assert candidate.start_seconds is not None and candidate.end_seconds is not None
+    # Starts during/before the buildup, before the drop.
+    assert candidate.start_seconds < 120.0
+    # Ends after the plateau, during/after the fade.
+    assert candidate.end_seconds > 155.0
+    duration = candidate.end_seconds - candidate.start_seconds
+    assert 20.0 <= duration <= 90.0
+
+
+def test_refine_clip_bounds_enforces_max_length():
+    times = np.arange(600, dtype=float)
+    scores = np.ones(600)  # constant energy: no natural boundaries
+
+    candidate = DropCandidate(timestamp_seconds=300.0, score=1.0)
+    refine_clip_bounds(times, scores, [candidate], min_len=20.0, max_len=60.0)
+
+    duration = candidate.end_seconds - candidate.start_seconds
+    assert duration <= 60.0 + 1e-6
 
 
 def test_enforce_min_spacing_prefers_higher_scores():

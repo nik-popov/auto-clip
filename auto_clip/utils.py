@@ -16,7 +16,12 @@ def run_command(command: list[str], dry_run: bool = False) -> None:
     if dry_run:
         print("[dry-run]", " ".join(command))
         return
-    subprocess.run(command, check=True)
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode != 0:
+        stderr_tail = (result.stderr or "").strip()[-600:]
+        raise RuntimeError(
+            f"Command failed ({result.returncode}): {command[0]} ... {stderr_tail}"
+        )
 
 
 def write_json(path: Path, payload: Any) -> None:

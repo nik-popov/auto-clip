@@ -21,13 +21,19 @@ def render_clips(
 
     manifest: list[dict[str, str | float]] = []
     for index, candidate in enumerate(ordered, start=1):
-        start_seconds = max(0.0, candidate.timestamp_seconds - float(config.pre_drop_seconds))
+        if candidate.start_seconds is not None and candidate.end_seconds is not None:
+            start_seconds = max(0.0, candidate.start_seconds)
+            duration_seconds = max(1.0, candidate.end_seconds - start_seconds)
+        else:
+            start_seconds = max(0.0, candidate.timestamp_seconds - float(config.pre_drop_seconds))
+            duration_seconds = float(config.clip_duration_seconds)
+
         output_file = output_root / f"clip_{index:02d}_{int(candidate.timestamp_seconds):05d}.mp4"
         command = build_ffmpeg_command(
             video_path=video_path,
             output_path=str(output_file),
             start_seconds=start_seconds,
-            duration_seconds=float(config.clip_duration_seconds),
+            duration_seconds=duration_seconds,
             vertical=config.render_vertical_9x16,
             vertical_mode=config.vertical_mode,
         )
@@ -39,7 +45,7 @@ def render_clips(
                 "drop_timestamp_seconds": candidate.timestamp_seconds,
                 "score": candidate.score,
                 "start_seconds": start_seconds,
-                "duration_seconds": float(config.clip_duration_seconds),
+                "duration_seconds": duration_seconds,
             }
         )
 

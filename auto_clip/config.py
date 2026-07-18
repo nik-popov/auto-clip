@@ -9,6 +9,9 @@ from pydantic import BaseModel, Field
 class PipelineConfig(BaseModel):
     clip_duration_seconds: int = Field(default=60, ge=10, le=180)
     pre_drop_seconds: int = Field(default=20, ge=0, le=90)
+    adaptive_length: bool = False
+    adaptive_min_seconds: int = Field(default=30, ge=10, le=120)
+    adaptive_max_seconds: int = Field(default=90, ge=20, le=180)
     max_clips: int = Field(default=12, ge=1, le=100)
     min_spacing_seconds: int = Field(default=45, ge=10, le=600)
     sample_rate: int = Field(default=22050, ge=8000, le=96000)

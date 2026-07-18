@@ -60,7 +60,77 @@ def detect_drop_candidates(
         )
         if len(ranked) >= config.max_clips:
             break
+
+    if config.adaptive_length and ranked:
+        refine_clip_bounds(
+            frame_times,
+            combined,
+            ranked,
+            min_len=float(config.adaptive_min_seconds),
+            max_len=float(config.adaptive_max_seconds),
+        )
+
     return ranked
+
+
+def refine_clip_bounds(
+    times: np.ndarray,
+    scores: np.ndarray,
+    candidates: list[DropCandidate],
+    min_len: float,
+    max_len: float,
+) -> None:
+    """Set per-candidate start/end by tracing each drop's energy arc.
+
+    Walks backward from the drop to find where the buildup begins (energy
+    trough) and forward to where the drop's energy fades, bounded by
+    min_len/max_len.
+    """
+    if len(times) < 3:
+        return
+
+    # Smooth over ~2 seconds of frames to ignore beat-level wiggle.
+    frame_rate = max(1.0, len(times) / max(times[-1], 1e-6))
+    window = max(3, int(frame_rate * 2.0))
+    kernel = np.ones(window) / window
+    envelope = np.convolve(scores, kernel, mode="same")
+
+    max_buildup_seconds = 45.0
+    for candidate in candidates:
+        idx = int(np.clip(np.searchsorted(times, candidate.timestamp_seconds), 0, len(envelope) - 1))
+        peak = float(envelope[idx])
+        if peak <= 0:
+            continue
+
+        # Backward: buildup starts where energy dips below 25% of the peak.
+        start_floor = 0.25 * peak
+        start_idx = idx
+        earliest = candidate.timestamp_seconds - max_buildup_seconds
+        while start_idx > 0 and times[start_idx] > earliest and envelope[start_idx] > start_floor:
+            start_idx -= 1
+        start = float(min(times[start_idx], candidate.timestamp_seconds - 5.0))
+        start = max(0.0, start)
+
+        # Forward: clip ends where energy falls below 35% of the peak.
+        end_floor = 0.35 * peak
+        end_idx = idx
+        latest = candidate.timestamp_seconds + max_len
+        while end_idx < len(envelope) - 1 and times[end_idx] < latest and envelope[end_idx] > end_floor:
+            end_idx += 1
+        end = float(times[end_idx])
+
+        # Enforce duration bounds while keeping the drop inside the clip.
+        if end - start < min_len:
+            end = start + min_len
+        if end - start > max_len:
+            overhang = (end - start) - max_len
+            # Trim buildup first, then the tail.
+            trim_start = min(overhang, max(0.0, candidate.timestamp_seconds - 5.0 - start))
+            start += trim_start
+            end = start + max_len
+
+        candidate.start_seconds = round(start, 3)
+        candidate.end_seconds = round(end, 3)
 
 
 def heatmap_curve(times: np.ndarray, heatmap: list[tuple[float, float, float]]) -> np.ndarray:

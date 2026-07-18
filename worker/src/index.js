@@ -157,7 +157,16 @@ function appUi() {
         <label for="source">Video URL</label>
         <input type="text" id="source" placeholder="https://... (direct .mp4/.m4v/.mkv or YouTube URL)" />
         <div class="opts">
-          <div><label>Clip length (sec)</label><input type="number" id="opt-duration" value="60" min="10" max="180"></div>
+          <div><label>Clip length</label>
+            <select id="opt-duration">
+              <option value="auto" selected>Auto — AI picks per clip (30-90s)</option>
+              <option value="30">30s fixed</option>
+              <option value="60">60s fixed</option>
+              <option value="90">90s fixed</option>
+              <option value="120">120s fixed</option>
+              <option value="180">180s fixed</option>
+            </select>
+          </div>
           <div><label>Max clips</label><input type="number" id="opt-max" value="6" min="1" max="50"></div>
           <div><label>Min gap between clips (sec)</label><input type="number" id="opt-spacing" value="120" min="10" max="600"></div>
           <div><label>Buildup before drop (sec)</label><input type="number" id="opt-pre" value="20" min="0" max="90"></div>
@@ -212,9 +221,11 @@ GET  /results/&lt;job-id&gt;             → { status: { state }, files: [ { nam
 GET  /files/jobs/&lt;job-id&gt;/&lt;name&gt;   → media file (mp4 / json)
 GET  /health                        → service check
 
-config fields: clip_duration_seconds, max_clips, min_spacing_seconds,
-               pre_drop_seconds, render_vertical_9x16, vertical_mode (crop|blur),
-               sample_rate, use_youtube_heatmap (default true), heatmap_weight (0-1)</pre>
+config fields: clip_duration_seconds, adaptive_length (AI per-clip length),
+               adaptive_min_seconds, adaptive_max_seconds, max_clips,
+               min_spacing_seconds, pre_drop_seconds, render_vertical_9x16,
+               vertical_mode (crop|blur), sample_rate,
+               use_youtube_heatmap (default true), heatmap_weight (0-1)</pre>
       </details>
     </main>
 
@@ -266,14 +277,19 @@ config fields: clip_duration_seconds, max_clips, min_spacing_seconds,
       // ---------- config ----------
       function buildConfig() {
         var format = $("opt-format").value;
+        var durationChoice = $("opt-duration").value;
         var cfg = {
-          clip_duration_seconds: parseInt($("opt-duration").value, 10) || 60,
           max_clips: parseInt($("opt-max").value, 10) || 6,
           min_spacing_seconds: parseInt($("opt-spacing").value, 10) || 120,
           pre_drop_seconds: parseInt($("opt-pre").value, 10) || 20,
           render_vertical_9x16: format !== "horizontal",
           vertical_mode: format === "vertical-blur" ? "blur" : "crop"
         };
+        if (durationChoice === "auto") {
+          cfg.adaptive_length = true;
+        } else {
+          cfg.clip_duration_seconds = parseInt(durationChoice, 10) || 60;
+        }
         var raw = $("rawcfg").value.trim();
         if (raw) {
           try {
@@ -429,10 +445,11 @@ config fields: clip_duration_seconds, max_clips, min_spacing_seconds,
             var summary = await sRes.json();
             var rows = (summary.clips || []).map(function (c, i) {
               return "<tr><td>" + (i + 1) + "</td><td>" + ts(c.drop_timestamp_seconds) + "</td><td>" +
-                (Math.round(c.score * 100) / 100) + "</td><td>" + ts(c.start_seconds) + "</td></tr>";
+                (Math.round(c.score * 100) / 100) + "</td><td>" + ts(c.start_seconds) + "</td><td>" +
+                Math.round(c.duration_seconds) + "s</td></tr>";
             }).join("");
             if (rows) {
-              $("drops").innerHTML = "<h3>Detected drops (ranked \u2014 clip 1 is the strongest)</h3><table><tr><th>#</th><th>Drop at</th><th>Score</th><th>Clip starts</th></tr>" + rows + "</table>";
+              $("drops").innerHTML = "<h3>Detected drops (ranked \u2014 clip 1 is the strongest)</h3><table><tr><th>#</th><th>Drop at</th><th>Score</th><th>Clip starts</th><th>Length</th></tr>" + rows + "</table>";
             }
           }
         } catch (e) { /* non-fatal */ }
