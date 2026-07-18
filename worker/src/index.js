@@ -31,180 +31,383 @@ function appUi() {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Auto Clip Job Launcher</title>
+    <title>Auto Clip — DJ set to short clips</title>
     <style>
       :root {
-        --bg: #0f172a;
-        --panel: #111827;
-        --panel-2: #1f2937;
-        --text: #e5e7eb;
-        --muted: #94a3b8;
+        --bg: #0b1020;
+        --panel: #121a2e;
+        --panel-2: #0e1526;
+        --line: #26324d;
+        --text: #e7ecf5;
+        --muted: #8fa0bd;
         --accent: #22c55e;
         --accent-2: #06b6d4;
+        --err: #f87171;
+        --warn: #fbbf24;
       }
+      * { box-sizing: border-box; }
       body {
         margin: 0;
-        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
         color: var(--text);
-        background: radial-gradient(circle at 10% 10%, #1e293b 0, var(--bg) 55%);
+        background: radial-gradient(1200px 600px at 15% -10%, #1c2a4a 0, var(--bg) 60%);
         min-height: 100vh;
-        display: grid;
-        place-items: center;
-        padding: 20px;
       }
+      header {
+        display: flex; align-items: center; justify-content: space-between;
+        max-width: 960px; margin: 0 auto; padding: 22px 20px 6px;
+      }
+      .brand { font-size: 1.35rem; font-weight: 800; letter-spacing: .3px; }
+      .brand em { color: var(--accent); font-style: normal; }
+      .pill {
+        font-size: 12px; padding: 4px 12px; border-radius: 999px;
+        border: 1px solid var(--line); color: var(--muted); background: var(--panel-2);
+      }
+      .pill.ok { color: var(--accent); border-color: #14532d; }
+      .pill.bad { color: var(--err); border-color: #7f1d1d; }
+      main { max-width: 960px; margin: 0 auto; padding: 10px 20px 60px; display: grid; gap: 18px; }
       .card {
-        width: min(760px, 100%);
         background: linear-gradient(180deg, var(--panel), var(--panel-2));
-        border: 1px solid #334155;
-        border-radius: 16px;
-        padding: 24px;
-        box-shadow: 0 14px 30px rgba(0, 0, 0, 0.35);
+        border: 1px solid var(--line); border-radius: 16px; padding: 22px;
+        box-shadow: 0 12px 28px rgba(0,0,0,.35);
       }
-      h1 {
-        margin: 0 0 8px;
-        font-size: 1.7rem;
+      h2 { margin: 0 0 6px; font-size: 1.15rem; }
+      h3 { margin: 18px 0 8px; font-size: .95rem; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
+      .muted { color: var(--muted); font-size: .92rem; margin: 0 0 14px; }
+      label { display: block; margin: 0 0 5px; font-weight: 600; font-size: .85rem; }
+      input[type=text], input[type=number], textarea {
+        width: 100%; border: 1px solid var(--line); border-radius: 10px;
+        padding: 11px 13px; background: #0a101f; color: var(--text); font-size: .95rem;
       }
-      p {
-        margin: 0 0 18px;
-        color: var(--muted);
-      }
-      label {
-        display: block;
-        margin: 10px 0 6px;
-        font-weight: 600;
-      }
-      input, textarea {
-        width: 100%;
-        box-sizing: border-box;
-        border: 1px solid #475569;
-        border-radius: 10px;
-        padding: 10px 12px;
-        background: #0b1220;
-        color: var(--text);
-      }
-      textarea {
-        min-height: 120px;
-      }
-      .actions {
-        display: flex;
-        gap: 12px;
-        margin-top: 14px;
-      }
+      input:focus, textarea:focus { outline: 2px solid #155e75; border-color: transparent; }
+      textarea { min-height: 90px; font-family: ui-monospace, monospace; font-size: .85rem; }
+      .opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 14px 0 6px; }
+      .check { display: flex; align-items: center; gap: 8px; margin: 12px 0; font-weight: 600; font-size: .9rem; cursor: pointer; }
+      .check input { width: 17px; height: 17px; accent-color: var(--accent); }
       button {
-        border: none;
-        border-radius: 10px;
-        padding: 10px 16px;
-        font-weight: 700;
-        cursor: pointer;
+        border: none; border-radius: 10px; padding: 12px 20px; font-weight: 700;
+        cursor: pointer; font-size: .95rem;
       }
-      .primary {
-        background: linear-gradient(90deg, var(--accent), var(--accent-2));
-        color: #041013;
+      .primary { background: linear-gradient(90deg, var(--accent), var(--accent-2)); color: #04120a; width: 100%; margin-top: 8px; }
+      .primary:disabled { opacity: .5; cursor: wait; }
+
+      .sec { background: #223050; color: var(--text); }
+      .row { display: flex; gap: 10px; align-items: center; }
+      .row input { flex: 1; }
+      .badge {
+        font-size: 12px; font-weight: 700; padding: 4px 12px; border-radius: 999px;
+        text-transform: uppercase; letter-spacing: .5px;
       }
-      .secondary {
-        background: #334155;
-        color: var(--text);
+      .badge.processing, .badge.pending, .badge.queued { background: #172554; color: #93c5fd; }
+      .badge.done { background: #052e16; color: var(--accent); }
+      .badge.error { background: #450a0a; color: var(--err); }
+      .spinner {
+        width: 16px; height: 16px; border: 2px solid var(--line); border-top-color: var(--accent);
+        border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block; vertical-align: -3px;
       }
-      pre {
-        margin-top: 14px;
-        background: #020617;
-        border: 1px solid #334155;
-        border-radius: 10px;
-        padding: 12px;
-        overflow: auto;
-        white-space: pre-wrap;
+      @keyframes spin { to { transform: rotate(360deg); } }
+      #job-progress { display: flex; gap: 10px; align-items: center; color: var(--muted); margin: 12px 0; font-size: .92rem; }
+      .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin-top: 14px; }
+      .clip { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #0a101f; }
+      .clip video { width: 100%; display: block; background: #000; aspect-ratio: 16/9; }
+      .clip .meta { display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; font-size: .82rem; }
+      .clip a { color: var(--accent); font-weight: 700; text-decoration: none; }
+      table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: .88rem; }
+      th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+      th { color: var(--muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .5px; }
+      .hidden { display: none; }
+      .error-box { background: #450a0a; border: 1px solid #7f1d1d; color: #fecaca; border-radius: 10px; padding: 12px 14px; font-size: .88rem; margin-top: 12px; white-space: pre-wrap; word-break: break-word; }
+      .hist-row {
+        display: flex; justify-content: space-between; align-items: center; gap: 10px;
+        padding: 10px 6px; border-bottom: 1px solid var(--line); cursor: pointer; font-size: .9rem;
       }
-      .tiny {
-        margin-top: 10px;
-        font-size: 12px;
-        color: var(--muted);
+      .hist-row:hover { background: #16203a; }
+      .hist-row .src { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; color: var(--text); }
+      .hist-row .when { color: var(--muted); font-size: .78rem; white-space: nowrap; }
+      details.card > summary {
+        cursor: pointer; font-weight: 700; font-size: 1.05rem; list-style: none;
       }
+      details.card > summary::before { content: "▸ "; color: var(--accent); }
+      details.card[open] > summary::before { content: "▾ "; }
+      pre.api {
+        background: #05080f; border: 1px solid var(--line); border-radius: 10px;
+        padding: 14px; overflow: auto; font-size: .8rem; line-height: 1.6; color: #a5f3fc;
+      }
+      .msg { margin-top: 10px; font-size: .88rem; color: var(--muted); }
+      .msg.err { color: var(--err); }
     </style>
   </head>
   <body>
-    <main class="card">
-      <h1>Auto Clip Job Launcher</h1>
-      <p>Submit YouTube or media URLs to the Worker queue for downstream clip processing.</p>
-      <label for="source">Source URL</label>
-      <input id="source" placeholder="https://www.youtube.com/watch?v=..." />
+    <header>
+      <div class="brand">⚡ Auto<em>Clip</em></div>
+      <div id="svc" class="pill">checking…</div>
+    </header>
+    <main>
+      <section class="card">
+        <h2>Create clips from a DJ set</h2>
+        <p class="muted">Paste a video URL. AutoClip finds the drops and cuts short shareable clips automatically.</p>
+        <label for="source">Video URL</label>
+        <input type="text" id="source" placeholder="https://... (direct .mp4/.m4v/.mkv or YouTube URL)" />
+        <div class="opts">
+          <div><label>Clip length (sec)</label><input type="number" id="opt-duration" value="30" min="10" max="120"></div>
+          <div><label>Max clips</label><input type="number" id="opt-max" value="6" min="1" max="50"></div>
+          <div><label>Min gap between clips (sec)</label><input type="number" id="opt-spacing" value="120" min="10" max="600"></div>
+          <div><label>Start before drop (sec)</label><input type="number" id="opt-pre" value="10" min="0" max="60"></div>
+        </div>
+        <label class="check"><input type="checkbox" id="opt-vertical"> Vertical 9:16 export (TikTok / Reels / Shorts)</label>
+        <button id="submit" class="primary">Generate clips</button>
+        <div id="submit-msg" class="msg"></div>
+      </section>
 
-      <label for="config">Optional Config JSON</label>
-      <textarea id="config" placeholder='{"max_clips": 8, "render_vertical_9x16": true}'></textarea>
+      <section class="card hidden" id="job-panel">
+        <div class="row" style="justify-content: space-between;">
+          <h2 style="margin:0;">Job <span id="job-id-short" class="muted" style="font-size:.8rem;"></span></h2>
+          <span id="job-state" class="badge pending">pending</span>
+        </div>
+        <div class="muted" id="job-meta" style="margin-top:6px;"></div>
+        <div id="job-progress"><span class="spinner"></span><span id="job-hint">Queued — waiting for the processor…</span></div>
+        <div id="gallery" class="gallery"></div>
+        <div id="drops"></div>
+        <div id="job-error" class="error-box hidden"></div>
+      </section>
 
-      <div class="actions">
-        <button id="submit" class="primary">Queue Job</button>
-        <button id="health" class="secondary">Check Health</button>
-      </div>
+      <section class="card" id="history-card">
+        <h2>History</h2>
+        <p class="muted" style="margin-bottom:4px;">Jobs from this browser. Click to reopen.</p>
+        <div id="history"><div class="msg">No jobs yet.</div></div>
+      </section>
 
-      <pre id="result">Ready.</pre>
-      <div id="clips"></div>
-      <div class="tiny">This page calls the same Worker origin endpoints: POST /jobs, GET /results/&lt;id&gt;, GET /health.</div>
+      <details class="card">
+        <summary>Advanced</summary>
+        <h3>Batch queue</h3>
+        <p class="muted">One URL per line. Uses the options above.</p>
+        <textarea id="batch" placeholder="https://...\nhttps://..."></textarea>
+        <button id="batch-btn" class="sec" style="margin-top:8px;">Queue all</button>
+        <div id="batch-msg" class="msg"></div>
+        <h3>Look up a job</h3>
+        <div class="row">
+          <input type="text" id="lookup" placeholder="job id" />
+          <button id="lookup-btn" class="sec">Open</button>
+        </div>
+        <h3>Raw config override (JSON, merged over options)</h3>
+        <textarea id="rawcfg" placeholder='{"sample_rate": 22050}'></textarea>
+        <h3>API reference</h3>
+        <pre class="api">POST /jobs                          body: {"source": "URL", "config": { ... }}
+                                    → 202 { job: { id } }
+GET  /results/&lt;job-id&gt;             → { status: { state }, files: [ { name, size, url } ] }
+GET  /files/jobs/&lt;job-id&gt;/&lt;name&gt;   → media file (mp4 / json)
+GET  /health                        → service check
+
+config fields: clip_duration_seconds, max_clips, min_spacing_seconds,
+               pre_drop_seconds, render_vertical_9x16, sample_rate</pre>
+      </details>
     </main>
 
     <script>
-      const source = document.getElementById("source");
-      const config = document.getElementById("config");
-      const result = document.getElementById("result");
-      const clipsBox = document.getElementById("clips");
-      let pollTimer = null;
+      var pollTimer = null;
+      var currentJob = null;
+      var startedAt = null;
 
-      function show(data) {
-        result.textContent = JSON.stringify(data, null, 2);
+      function $(id) { return document.getElementById(id); }
+      function esc(s) {
+        return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\"/g, "&quot;");
+      }
+      function mb(n) { return (Math.round(n / 1024 / 1024 * 10) / 10) + " MB"; }
+      function ts(sec) {
+        sec = Math.floor(sec);
+        var m = Math.floor(sec / 60), s = sec % 60;
+        return m + ":" + (s < 10 ? "0" : "") + s;
       }
 
-      function renderClips(files) {
-        const clips = files.filter((f) => f.name.endsWith(".mp4"));
-        if (!clips.length) { clipsBox.innerHTML = ""; return; }
-        clipsBox.innerHTML = "<h3>Clips</h3>" + clips.map((f) =>
-          '<p><a style="color:#22c55e" href="' + f.url + '" target="_blank">' + f.name + '</a> (' + Math.round(f.size / 1024 / 1024 * 10) / 10 + ' MB)</p>'
-        ).join("");
+      // ---------- history ----------
+      function loadHist() {
+        try { return JSON.parse(localStorage.getItem("autoclip-history") || "[]"); } catch (e) { return []; }
+      }
+      function saveHist(items) { localStorage.setItem("autoclip-history", JSON.stringify(items.slice(0, 25))); }
+      function addHist(id, source) {
+        var items = loadHist().filter(function (j) { return j.id !== id; });
+        items.unshift({ id: id, source: source, at: Date.now(), state: "queued" });
+        saveHist(items); renderHist();
+      }
+      function setHistState(id, state) {
+        var items = loadHist();
+        items.forEach(function (j) { if (j.id === id) j.state = state; });
+        saveHist(items); renderHist();
+      }
+      function renderHist() {
+        var items = loadHist();
+        if (!items.length) { $("history").innerHTML = '<div class="msg">No jobs yet.</div>'; return; }
+        $("history").innerHTML = items.map(function (j) {
+          return '<div class="hist-row" data-id="' + esc(j.id) + '" data-src="' + esc(j.source) + '">' +
+            '<span class="src">' + esc(j.source) + '</span>' +
+            '<span class="when">' + new Date(j.at).toLocaleString() + '</span>' +
+            '<span class="badge ' + esc(j.state || "queued") + '">' + esc(j.state || "queued") + '</span></div>';
+        }).join("");
+        Array.prototype.forEach.call(document.querySelectorAll(".hist-row"), function (row) {
+          row.addEventListener("click", function () { openJob(row.getAttribute("data-id"), row.getAttribute("data-src")); });
+        });
       }
 
-      async function poll(jobId) {
-        const response = await fetch("/results/" + jobId);
-        const data = await response.json();
-        show(data);
-        renderClips(data.files || []);
-        const state = data.status && data.status.state;
-        if (state === "done" || state === "error") {
-          clearInterval(pollTimer);
-          pollTimer = null;
-        }
-      }
-
-      document.getElementById("submit").addEventListener("click", async () => {
-        const payload = { source: source.value.trim() };
-        if (!payload.source) {
-          show({ ok: false, error: "Source URL is required" });
-          return;
-        }
-
-        if (config.value.trim()) {
+      // ---------- config ----------
+      function buildConfig() {
+        var cfg = {
+          clip_duration_seconds: parseInt($("opt-duration").value, 10) || 30,
+          max_clips: parseInt($("opt-max").value, 10) || 6,
+          min_spacing_seconds: parseInt($("opt-spacing").value, 10) || 120,
+          pre_drop_seconds: parseInt($("opt-pre").value, 10) || 10,
+          render_vertical_9x16: $("opt-vertical").checked
+        };
+        var raw = $("rawcfg").value.trim();
+        if (raw) {
           try {
-            payload.config = JSON.parse(config.value);
-          } catch (err) {
-            show({ ok: false, error: "Config must be valid JSON", details: String(err) });
-            return;
-          }
+            var extra = JSON.parse(raw);
+            for (var k in extra) cfg[k] = extra[k];
+          } catch (e) { throw new Error("Advanced config JSON is invalid: " + e.message); }
         }
+        return cfg;
+      }
 
-        const response = await fetch("/jobs", {
+      // ---------- job submission ----------
+      async function queueJob(source) {
+        var cfg = buildConfig();
+        var res = await fetch("/jobs", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(payload)
+          body: JSON.stringify({ source: source, config: cfg })
         });
-        const data = await response.json();
-        show(data);
+        var data = await res.json();
+        if (!data.ok || !data.job || !data.job.id) throw new Error(data.error || "Submission failed");
+        addHist(data.job.id, source);
+        return data.job.id;
+      }
 
-        if (data.ok && data.job && data.job.id) {
-          if (pollTimer) clearInterval(pollTimer);
-          pollTimer = setInterval(() => poll(data.job.id), 8000);
+      $("submit").addEventListener("click", async function () {
+        var source = $("source").value.trim();
+        var msg = $("submit-msg");
+        msg.className = "msg"; msg.textContent = "";
+        if (!source) { msg.className = "msg err"; msg.textContent = "Please paste a video URL first."; return; }
+        $("submit").disabled = true;
+        try {
+          var id = await queueJob(source);
+          msg.textContent = "Job queued.";
+          openJob(id, source);
+        } catch (e) {
+          msg.className = "msg err"; msg.textContent = String(e.message || e);
+        } finally {
+          $("submit").disabled = false;
         }
       });
 
-      document.getElementById("health").addEventListener("click", async () => {
-        const response = await fetch("/health");
-        show(await response.json());
+      // ---------- batch ----------
+      $("batch-btn").addEventListener("click", async function () {
+        var lines = $("batch").value.split("\\n").map(function (l) { return l.trim(); }).filter(Boolean);
+        var msg = $("batch-msg");
+        msg.className = "msg"; msg.textContent = "";
+        if (!lines.length) { msg.className = "msg err"; msg.textContent = "Add at least one URL."; return; }
+        $("batch-btn").disabled = true;
+        var ok = 0, firstId = null;
+        try {
+          for (var i = 0; i < lines.length; i++) {
+            try {
+              var id = await queueJob(lines[i]);
+              if (!firstId) firstId = id;
+              ok++;
+            } catch (e) { /* continue batch */ }
+          }
+          msg.textContent = "Queued " + ok + " of " + lines.length + " jobs — track them in History.";
+          if (firstId) openJob(firstId, lines[0]);
+        } finally {
+          $("batch-btn").disabled = false;
+        }
+      });
+
+      // ---------- lookup ----------
+      $("lookup-btn").addEventListener("click", function () {
+        var id = $("lookup").value.trim();
+        if (id) openJob(id, "(lookup)");
+      });
+
+      // ---------- job panel ----------
+      function openJob(id, source) {
+        currentJob = id;
+        startedAt = Date.now();
+        $("job-panel").classList.remove("hidden");
+        $("job-id-short").textContent = id;
+        $("job-meta").textContent = source || "";
+        $("job-state").className = "badge pending"; $("job-state").textContent = "pending";
+        $("gallery").innerHTML = ""; $("drops").innerHTML = "";
+        $("job-error").classList.add("hidden");
+        $("job-progress").classList.remove("hidden");
+        $("job-hint").textContent = "Queued — waiting for the processor…";
+        $("job-panel").scrollIntoView({ behavior: "smooth" });
+        if (pollTimer) clearInterval(pollTimer);
+        poll();
+        pollTimer = setInterval(poll, 6000);
+      }
+
+      async function poll() {
+        if (!currentJob) return;
+        var res, data;
+        try {
+          res = await fetch("/results/" + encodeURIComponent(currentJob));
+          data = await res.json();
+        } catch (e) { return; }
+        var state = (data.status && data.status.state) || "pending";
+        $("job-state").className = "badge " + state;
+        $("job-state").textContent = state;
+        setHistState(currentJob, state);
+
+        if (state === "processing" || state === "pending" || state === "queued") {
+          var mins = Math.floor((Date.now() - startedAt) / 60000);
+          $("job-hint").textContent = state === "processing"
+            ? "Processing — downloading, analyzing and cutting clips… (" + mins + "m elapsed; long sets can take a while)"
+            : "Queued — the processor may be cold-starting (~1 min)…";
+          return;
+        }
+
+        clearInterval(pollTimer); pollTimer = null;
+        $("job-progress").classList.add("hidden");
+
+        if (state === "error") {
+          var box = $("job-error");
+          box.textContent = "Processing failed: " + ((data.status && data.status.error) || "unknown error");
+          box.classList.remove("hidden");
+          return;
+        }
+
+        // done → render gallery
+        var clips = (data.files || []).filter(function (f) { return f.name.slice(-4) === ".mp4"; });
+        $("gallery").innerHTML = clips.map(function (f) {
+          return '<div class="clip">' +
+            '<video controls preload="metadata" src="' + esc(f.url) + '"></video>' +
+            '<div class="meta"><span>' + esc(f.name) + '</span>' +
+            '<a href="' + esc(f.url) + '" download>' + mb(f.size) + ' ⬇</a></div></div>';
+        }).join("") || '<div class="msg">Finished, but no clips were produced. Try lowering “Min gap”.</div>';
+
+        // drop details from summary.json
+        try {
+          var sRes = await fetch("/files/jobs/" + encodeURIComponent(currentJob) + "/summary.json");
+          if (sRes.ok) {
+            var summary = await sRes.json();
+            var rows = (summary.clips || []).map(function (c, i) {
+              return "<tr><td>" + (i + 1) + "</td><td>" + ts(c.drop_timestamp_seconds) + "</td><td>" +
+                (Math.round(c.score * 100) / 100) + "</td><td>" + ts(c.start_seconds) + "</td></tr>";
+            }).join("");
+            if (rows) {
+              $("drops").innerHTML = "<h3>Detected drops</h3><table><tr><th>#</th><th>Drop at</th><th>Score</th><th>Clip starts</th></tr>" + rows + "</table>";
+            }
+          }
+        } catch (e) { /* non-fatal */ }
+      }
+
+      // ---------- boot ----------
+      renderHist();
+      fetch("/health").then(function (r) { return r.json(); }).then(function (h) {
+        var el = $("svc");
+        el.textContent = h.ok ? "service online" : "service issue";
+        el.className = "pill " + (h.ok ? "ok" : "bad");
+      }).catch(function () {
+        var el = $("svc"); el.textContent = "offline"; el.className = "pill bad";
       });
     </script>
   </body>
