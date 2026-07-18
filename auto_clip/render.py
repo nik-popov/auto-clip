@@ -16,8 +16,11 @@ def render_clips(
     output_root = Path(config.output_dir) / source_id
     output_root.mkdir(parents=True, exist_ok=True)
 
+    # Render best-scoring moments first: clip_01 is always the strongest drop.
+    ordered = sorted(candidates, key=lambda c: c.score, reverse=True)
+
     manifest: list[dict[str, str | float]] = []
-    for index, candidate in enumerate(candidates, start=1):
+    for index, candidate in enumerate(ordered, start=1):
         start_seconds = max(0.0, candidate.timestamp_seconds - float(config.pre_drop_seconds))
         output_file = output_root / f"clip_{index:02d}_{int(candidate.timestamp_seconds):05d}.mp4"
         command = build_ffmpeg_command(

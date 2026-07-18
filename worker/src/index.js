@@ -157,10 +157,10 @@ function appUi() {
         <label for="source">Video URL</label>
         <input type="text" id="source" placeholder="https://... (direct .mp4/.m4v/.mkv or YouTube URL)" />
         <div class="opts">
-          <div><label>Clip length (sec)</label><input type="number" id="opt-duration" value="30" min="10" max="120"></div>
+          <div><label>Clip length (sec)</label><input type="number" id="opt-duration" value="60" min="10" max="180"></div>
           <div><label>Max clips</label><input type="number" id="opt-max" value="6" min="1" max="50"></div>
           <div><label>Min gap between clips (sec)</label><input type="number" id="opt-spacing" value="120" min="10" max="600"></div>
-          <div><label>Start before drop (sec)</label><input type="number" id="opt-pre" value="10" min="0" max="60"></div>
+          <div><label>Buildup before drop (sec)</label><input type="number" id="opt-pre" value="20" min="0" max="90"></div>
           <div><label>Output format</label>
             <select id="opt-format">
               <option value="vertical-crop" selected>Vertical 9:16 — center crop (TikTok/Reels/Shorts)</option>
@@ -267,10 +267,10 @@ config fields: clip_duration_seconds, max_clips, min_spacing_seconds,
       function buildConfig() {
         var format = $("opt-format").value;
         var cfg = {
-          clip_duration_seconds: parseInt($("opt-duration").value, 10) || 30,
+          clip_duration_seconds: parseInt($("opt-duration").value, 10) || 60,
           max_clips: parseInt($("opt-max").value, 10) || 6,
           min_spacing_seconds: parseInt($("opt-spacing").value, 10) || 120,
-          pre_drop_seconds: parseInt($("opt-pre").value, 10) || 10,
+          pre_drop_seconds: parseInt($("opt-pre").value, 10) || 20,
           render_vertical_9x16: format !== "horizontal",
           vertical_mode: format === "vertical-blur" ? "blur" : "crop"
         };
@@ -432,7 +432,7 @@ config fields: clip_duration_seconds, max_clips, min_spacing_seconds,
                 (Math.round(c.score * 100) / 100) + "</td><td>" + ts(c.start_seconds) + "</td></tr>";
             }).join("");
             if (rows) {
-              $("drops").innerHTML = "<h3>Detected drops</h3><table><tr><th>#</th><th>Drop at</th><th>Score</th><th>Clip starts</th></tr>" + rows + "</table>";
+              $("drops").innerHTML = "<h3>Detected drops (ranked \u2014 clip 1 is the strongest)</h3><table><tr><th>#</th><th>Drop at</th><th>Score</th><th>Clip starts</th></tr>" + rows + "</table>";
             }
           }
         } catch (e) { /* non-fatal */ }
