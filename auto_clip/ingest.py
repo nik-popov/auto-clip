@@ -17,11 +17,10 @@ def _is_url(value: str) -> bool:
 def _download_with_ytdlp(source: str, video_path: Path, config: PipelineConfig) -> None:
     base = [
         "yt-dlp",
-        "-f",
-        "bv*[height<=1080]+ba/b[height<=1080]/b",
+        "--no-warnings",
+        "--no-playlist",
         "--merge-output-format",
         "mp4",
-        "--no-warnings",
         "-o",
         str(video_path),
     ]
@@ -39,16 +38,22 @@ def _download_with_ytdlp(source: str, video_path: Path, config: PipelineConfig) 
         except Exception:
             pass
 
+    # Prefer up to 1080p but never fail on format availability.
+    primary = ["-f", "bv*+ba/b", "-S", "res:1080"]
+    fallback = ["-f", "b", "-S", "res:1080"]
+
     if config.dry_run:
-        print("[dry-run]", " ".join(base + [source]))
+        print("[dry-run]", " ".join(base + primary + [source]))
         return
 
     is_youtube = "youtube.com" in source or "youtu.be" in source
-    attempts: list[list[str]] = [[]]
+    attempts: list[list[str]] = [primary]
     if is_youtube:
         attempts += [
-            ["--extractor-args", "youtube:player_client=tv"],
-            ["--extractor-args", "youtube:player_client=ios"],
+            ["--extractor-args", "youtube:player_client=tv"] + primary,
+            ["--extractor-args", "youtube:player_client=tv"] + fallback,
+            ["--extractor-args", "youtube:player_client=ios"] + primary,
+            ["--extractor-args", "youtube:player_client=ios"] + fallback,
         ]
 
     last_error = "unknown error"

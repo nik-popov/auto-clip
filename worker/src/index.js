@@ -421,7 +421,7 @@ config fields: clip_duration_seconds, adaptive_length (AI per-clip length),
           } else {
             var errText = (data.status && data.status.error) || "unknown error";
             var hint = /yt-dlp|youtu|download failed|sign in|bot/i.test(errText)
-              ? "\\n\\nTip: YouTube often blocks cloud servers. Resubmitting sometimes works (fallback clients are tried automatically). Direct .mp4/.m4v/.mkv links always work. For reliable YouTube downloads, a proxy or cookies can be configured server-side."
+              ? "\\n\\nYouTube blocked this download from the cloud server. What works: 1) resubmit once or twice (different fallback clients are tried), 2) use a direct .mp4/.m4v/.mkv link, 3) for reliable YouTube access, export your browser's youtube.com cookies and configure them server-side (wrangler secret YTDLP_COOKIES_B64)."
               : "";
             box.textContent = "Processing failed: " + errText + hint;
           }
