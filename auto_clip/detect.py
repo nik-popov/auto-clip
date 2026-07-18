@@ -49,12 +49,17 @@ def detect_drop_candidates(
         weight = float(config.heatmap_weight)
         combined = combined * (1.0 - weight) + heat * weight
 
-    raw = _top_local_maxima(frame_times, combined, max_items=config.max_clips * 8)
-    ranked = _enforce_min_spacing(
-        sorted(raw, key=lambda item: item.score, reverse=True),
-        spacing_seconds=float(config.min_spacing_seconds),
-        max_items=config.max_clips,
-    )
+    # Relax the peak threshold progressively until we can fill max_clips.
+    ranked: list[DropCandidate] = []
+    for quantile in (0.90, 0.75, 0.60, 0.40):
+        raw = _top_local_maxima(frame_times, combined, max_items=config.max_clips * 12, quantile=quantile)
+        ranked = _enforce_min_spacing(
+            sorted(raw, key=lambda item: item.score, reverse=True),
+            spacing_seconds=float(config.min_spacing_seconds),
+            max_items=config.max_clips,
+        )
+        if len(ranked) >= config.max_clips:
+            break
     return ranked
 
 
@@ -67,12 +72,14 @@ def heatmap_curve(times: np.ndarray, heatmap: list[tuple[float, float, float]]) 
     return _normalize(values)
 
 
-def _top_local_maxima(times: np.ndarray, values: np.ndarray, max_items: int) -> list[DropCandidate]:
+def _top_local_maxima(
+    times: np.ndarray, values: np.ndarray, max_items: int, quantile: float = 0.90
+) -> list[DropCandidate]:
     picks: list[DropCandidate] = []
     if len(values) < 3:
         return picks
 
-    threshold = float(np.quantile(values, 0.90))
+    threshold = float(np.quantile(values, quantile))
     for idx in range(1, len(values) - 1):
         if values[idx] < threshold:
             continue

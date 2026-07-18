@@ -26,6 +26,7 @@ def render_clips(
             start_seconds=start_seconds,
             duration_seconds=float(config.clip_duration_seconds),
             vertical=config.render_vertical_9x16,
+            vertical_mode=config.vertical_mode,
         )
         run_command(command, dry_run=config.dry_run)
 
@@ -48,6 +49,7 @@ def build_ffmpeg_command(
     start_seconds: float,
     duration_seconds: float,
     vertical: bool,
+    vertical_mode: str = "crop",
 ) -> list[str]:
     if not vertical:
         return [
@@ -61,6 +63,32 @@ def build_ffmpeg_command(
             f"{duration_seconds:.3f}",
             "-c",
             "copy",
+            output_path,
+        ]
+
+    if vertical_mode == "crop":
+        # Center-crop to 9:16 (fills the vertical frame, crops the sides).
+        return [
+            "ffmpeg",
+            "-y",
+            "-ss",
+            f"{start_seconds:.3f}",
+            "-i",
+            video_path,
+            "-t",
+            f"{duration_seconds:.3f}",
+            "-vf",
+            "crop=ih*9/16:ih,scale=1080:1920,setsar=1",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "21",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "192k",
             output_path,
         ]
 

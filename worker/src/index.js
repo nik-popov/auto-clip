@@ -83,11 +83,11 @@ function appUi() {
       h3 { margin: 18px 0 8px; font-size: .95rem; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
       .muted { color: var(--muted); font-size: .92rem; margin: 0 0 14px; }
       label { display: block; margin: 0 0 5px; font-weight: 600; font-size: .85rem; }
-      input[type=text], input[type=number], textarea {
+      input[type=text], input[type=number], textarea, select {
         width: 100%; border: 1px solid var(--line); border-radius: 10px;
         padding: 11px 13px; background: #0a101f; color: var(--text); font-size: .95rem;
       }
-      input:focus, textarea:focus { outline: 2px solid #155e75; border-color: transparent; }
+      input:focus, textarea:focus, select:focus { outline: 2px solid #155e75; border-color: transparent; }
       textarea { min-height: 90px; font-family: ui-monospace, monospace; font-size: .85rem; }
       .opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 14px 0 6px; }
       .check { display: flex; align-items: center; gap: 8px; margin: 12px 0; font-weight: 600; font-size: .9rem; cursor: pointer; }
@@ -117,7 +117,7 @@ function appUi() {
       #job-progress { display: flex; gap: 10px; align-items: center; color: var(--muted); margin: 12px 0; font-size: .92rem; }
       .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin-top: 14px; }
       .clip { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #0a101f; }
-      .clip video { width: 100%; display: block; background: #000; aspect-ratio: 16/9; }
+      .clip video { width: 100%; display: block; background: #000; max-height: 420px; }
       .clip .meta { display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; font-size: .82rem; }
       .clip a { color: var(--accent); font-weight: 700; text-decoration: none; }
       table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: .88rem; }
@@ -161,8 +161,14 @@ function appUi() {
           <div><label>Max clips</label><input type="number" id="opt-max" value="6" min="1" max="50"></div>
           <div><label>Min gap between clips (sec)</label><input type="number" id="opt-spacing" value="120" min="10" max="600"></div>
           <div><label>Start before drop (sec)</label><input type="number" id="opt-pre" value="10" min="0" max="60"></div>
+          <div><label>Output format</label>
+            <select id="opt-format">
+              <option value="vertical-crop" selected>Vertical 9:16 — center crop (TikTok/Reels/Shorts)</option>
+              <option value="vertical-blur">Vertical 9:16 — fit + blurred background</option>
+              <option value="horizontal">Horizontal — original frame (fastest)</option>
+            </select>
+          </div>
         </div>
-        <label class="check"><input type="checkbox" id="opt-vertical"> Vertical 9:16 export (TikTok / Reels / Shorts)</label>
         <button id="submit" class="primary">Generate clips</button>
         <div id="submit-msg" class="msg"></div>
       </section>
@@ -207,8 +213,8 @@ GET  /files/jobs/&lt;job-id&gt;/&lt;name&gt;   → media file (mp4 / json)
 GET  /health                        → service check
 
 config fields: clip_duration_seconds, max_clips, min_spacing_seconds,
-               pre_drop_seconds, render_vertical_9x16, sample_rate,
-               use_youtube_heatmap (default true), heatmap_weight (0-1)</pre>
+               pre_drop_seconds, render_vertical_9x16, vertical_mode (crop|blur),
+               sample_rate, use_youtube_heatmap (default true), heatmap_weight (0-1)</pre>
       </details>
     </main>
 
@@ -259,12 +265,14 @@ config fields: clip_duration_seconds, max_clips, min_spacing_seconds,
 
       // ---------- config ----------
       function buildConfig() {
+        var format = $("opt-format").value;
         var cfg = {
           clip_duration_seconds: parseInt($("opt-duration").value, 10) || 30,
           max_clips: parseInt($("opt-max").value, 10) || 6,
           min_spacing_seconds: parseInt($("opt-spacing").value, 10) || 120,
           pre_drop_seconds: parseInt($("opt-pre").value, 10) || 10,
-          render_vertical_9x16: $("opt-vertical").checked
+          render_vertical_9x16: format !== "horizontal",
+          vertical_mode: format === "vertical-blur" ? "blur" : "crop"
         };
         var raw = $("rawcfg").value.trim();
         if (raw) {
