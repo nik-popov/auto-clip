@@ -3,6 +3,14 @@ import { Container } from "@cloudflare/containers";
 export class ProcessorContainer extends Container {
   defaultPort = 8080;
   sleepAfter = "45m";
+
+  constructor(ctx, env) {
+    super(ctx, env);
+    this.envVars = {
+      YTDLP_PROXY: env.YTDLP_PROXY ?? "",
+      YTDLP_COOKIES_B64: env.YTDLP_COOKIES_B64 ?? ""
+    };
+  }
 }
 
 function json(data, status = 200) {
@@ -376,9 +384,15 @@ config fields: clip_duration_seconds, max_clips, min_spacing_seconds,
 
         if (state === "error" || state === "lost") {
           var box = $("job-error");
-          box.textContent = state === "lost"
-            ? "This job was lost before processing (service restart). Please resubmit the URL above."
-            : "Processing failed: " + ((data.status && data.status.error) || "unknown error");
+          if (state === "lost") {
+            box.textContent = "This job was lost before processing (service restart). Please resubmit the URL above.";
+          } else {
+            var errText = (data.status && data.status.error) || "unknown error";
+            var hint = /yt-dlp|youtu|download failed|sign in|bot/i.test(errText)
+              ? "\\n\\nTip: YouTube often blocks cloud servers. Resubmitting sometimes works (fallback clients are tried automatically). Direct .mp4/.m4v/.mkv links always work. For reliable YouTube downloads, a proxy or cookies can be configured server-side."
+              : "";
+            box.textContent = "Processing failed: " + errText + hint;
+          }
           box.classList.remove("hidden");
           return;
         }
