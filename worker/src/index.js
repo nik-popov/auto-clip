@@ -359,10 +359,15 @@ config fields: clip_duration_seconds, max_clips, min_spacing_seconds,
         setHistState(currentJob, state);
 
         if (state === "processing" || state === "pending" || state === "queued") {
-          var mins = Math.floor((Date.now() - startedAt) / 60000);
-          $("job-hint").textContent = state === "processing"
-            ? "Processing — downloading, analyzing and cutting clips… (" + mins + "m elapsed; long sets can take a while)"
-            : "Queued — the processor may be cold-starting (~1 min)…";
+          var elapsed = Math.floor((Date.now() - startedAt) / 1000);
+          var mins = Math.floor(elapsed / 60);
+          if (state === "processing") {
+            $("job-hint").textContent = "Processing — downloading, analyzing and cutting clips… (" + mins + "m elapsed; long sets can take 10-30 min)";
+          } else if (elapsed > 150) {
+            $("job-hint").textContent = "Still pending after " + mins + "m — this job was likely lost (e.g. during a service restart). Resubmit the URL above.";
+          } else {
+            $("job-hint").textContent = "Queued — the processor may be cold-starting (~1 min)…";
+          }
           return;
         }
 
@@ -477,6 +482,19 @@ export default {
         mode: env.AUTO_CLIP_JOBS ? "queued" : "stub",
         job: payload
       }, 202);
+    }
+
+    if (request.method === "GET" && url.pathname === "/jobs/recent") {
+      const listed = await env.OUTPUTS.list({ prefix: "jobs/", delimiter: "/" });
+      const ids = (listed.delimitedPrefixes || []).map((p) => p.split("/")[1]).filter(Boolean);
+      const jobs = [];
+      for (const id of ids.slice(-30)) {
+        const statusObject = await env.OUTPUTS.get(`jobs/${id}/status.json`);
+        let status = null;
+        if (statusObject) { try { status = await statusObject.json(); } catch {} }
+        jobs.push({ id, state: (status && status.state) || "unknown" });
+      }
+      return json({ ok: true, jobs });
     }
 
     if (request.method === "GET" && url.pathname.startsWith("/results/")) {
