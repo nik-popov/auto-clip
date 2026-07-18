@@ -20,17 +20,27 @@ def ingest_source(source: str, work_dir: str, config: PipelineConfig) -> SourceA
     wav_path = source_dir / "source.wav"
 
     if _is_url(source):
-        run_command(
-            [
-                "yt-dlp",
-                "-f",
-                "bv*+ba/b",
-                "-o",
-                str(video_path),
-                source,
-            ],
-            dry_run=config.dry_run,
-        )
+        direct_extensions = (".mp4", ".mkv", ".webm", ".mov", ".m4v", ".mp3", ".wav")
+        path_part = source.split("?", 1)[0].lower()
+        if path_part.endswith(direct_extensions):
+            run_command(
+                ["curl", "-L", "--fail", "-sS", "-o", str(video_path), source],
+                dry_run=config.dry_run,
+            )
+        else:
+            run_command(
+                [
+                    "yt-dlp",
+                    "-f",
+                    "bv*[height<=1080]+ba/b[height<=1080]/b",
+                    "--merge-output-format",
+                    "mp4",
+                    "-o",
+                    str(video_path),
+                    source,
+                ],
+                dry_run=config.dry_run,
+            )
     else:
         original = Path(source)
         if not original.exists() and not config.dry_run:

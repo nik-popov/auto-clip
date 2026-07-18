@@ -2,17 +2,47 @@ from __future__ import annotations
 
 import argparse
 import json
+import threading
 import traceback
-from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from auto_clip.cli import run_pipeline
 from auto_clip.config import RunRequest
 
+JOBS: dict[str, dict[str, object]] = {}
+JOBS_LOCK = threading.Lock()
+
+
+def _set_job(job_id: str, **fields: object) -> None:
+    with JOBS_LOCK:
+        entry = JOBS.setdefault(job_id, {})
+        entry.update(fields)
+
+
+def _process_job(payload: dict[str, object], work_dir: Path, config_path: str | None) -> None:
+    job_id = str(payload.get("id") or "manual")
+    source = str(payload["source"])
+
+    try:
+        request = RunRequest(source=source, config_path=config_path, work_dir=str(work_dir))
+        summary = run_pipeline(request)
+
+        clip_paths = []
+        for clip in summary.get("clips", []):
+            clip_path = Path(str(clip.get("clip_path", "")))
+            if clip_path.exists():
+                clip_paths.append(str(clip_path))
+
+        _set_job(job_id, state="done", summary=summary, clip_paths=clip_paths)
+        print(f"Job {job_id} completed: {len(clip_paths)} clips")
+    except Exception as exc:
+        print(f"Job {job_id} failed: {exc}")
+        _set_job(job_id, state="error", error=str(exc), trace=traceback.format_exc())
+
 
 class ProcessorHandler(BaseHTTPRequestHandler):
-    server_version = "AutoClipProcessor/0.1"
+    server_version = "AutoClipProcessor/0.3"
 
     def _json_response(self, payload: dict[str, object], status: int = 200) -> None:
         body = json.dumps(payload, indent=2).encode("utf-8")
@@ -32,6 +62,48 @@ class ProcessorHandler(BaseHTTPRequestHandler):
                 }
             )
             return
+
+        if self.path.startswith("/job/"):
+            parts = self.path.split("/")
+            # /job/<id> or /job/<id>/file/<name>
+            if len(parts) == 3:
+                job_id = parts[2]
+                with JOBS_LOCK:
+                    entry = dict(JOBS.get(job_id) or {})
+                if not entry:
+                    self._json_response({"ok": False, "error": "Unknown job"}, status=404)
+                    return
+                files = [Path(p).name for p in entry.get("clip_paths", [])]
+                self._json_response(
+                    {
+                        "ok": True,
+                        "job_id": job_id,
+                        "state": entry.get("state"),
+                        "files": files,
+                        "summary": entry.get("summary"),
+                        "error": entry.get("error"),
+                    }
+                )
+                return
+
+            if len(parts) == 5 and parts[3] == "file":
+                job_id, name = parts[2], parts[4]
+                with JOBS_LOCK:
+                    entry = JOBS.get(job_id) or {}
+                    clip_paths = list(entry.get("clip_paths", []))
+                match = next((p for p in clip_paths if Path(p).name == name), None)
+                if not match or not Path(match).exists():
+                    self._json_response({"ok": False, "error": "File not found"}, status=404)
+                    return
+                data = Path(match).read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "video/mp4")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+                return
+
+        self._json_response({"ok": False, "error": "Not Found"}, status=404)
 
         self._json_response({"ok": False, "error": "Not Found"}, status=404)
 
@@ -61,6 +133,7 @@ class ProcessorHandler(BaseHTTPRequestHandler):
         job_id = payload.get("id") if isinstance(payload, dict) else None
         if not isinstance(job_id, str) or not job_id:
             job_id = "manual"
+            payload["id"] = job_id
 
         config_path = None
         config_data = payload.get("config") if isinstance(payload, dict) else None
@@ -75,32 +148,24 @@ class ProcessorHandler(BaseHTTPRequestHandler):
             config_file.write_text(json.dumps(config_data, indent=2), encoding="utf-8")
             config_path = str(config_file)
 
-        request = RunRequest(source=source, config_path=config_path, work_dir=str(self.server.work_dir))
+        _set_job(job_id, state="processing", source=source)
 
-        try:
-            summary = run_pipeline(request)
-            self._json_response(
-                {
-                    "ok": True,
-                    "processed": True,
-                    "job_id": job_id,
-                    "source_id": summary.get("source_id"),
-                    "candidate_count": summary.get("candidate_count"),
-                    "clip_count": len(summary.get("clips", [])),
-                    "summary": summary,
-                },
-                status=HTTPStatus.ACCEPTED,
-            )
-        except Exception as exc:  # pragma: no cover
-            self._json_response(
-                {
-                    "ok": False,
-                    "processed": False,
-                    "error": str(exc),
-                    "trace": traceback.format_exc(),
-                },
-                status=500,
-            )
+        worker = threading.Thread(
+            target=_process_job,
+            args=(payload, self.server.work_dir, config_path),
+            daemon=True,
+        )
+        worker.start()
+
+        self._json_response(
+            {
+                "ok": True,
+                "accepted": True,
+                "job_id": job_id,
+                "state": "processing",
+            },
+            status=202,
+        )
 
 
 class ProcessorServer(ThreadingHTTPServer):
